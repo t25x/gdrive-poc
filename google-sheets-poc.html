@@ -122,6 +122,7 @@
     if (!res.ok) { showStatus(`読み込みエラー: ${res.status} ${res.statusText}`, true); return; }
     const data = await res.json();
     currentFileId = fileId;
+    history.pushState({}, '', `?fileId=${fileId}`);
     renderTable('nodes', data.nodes || [], NODE_FIELDS);
     renderTable('links', data.links || [], LINK_FIELDS);
     document.getElementById('data-section').classList.remove('hidden');
