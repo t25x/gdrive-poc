@@ -1,5 +1,7 @@
 # Google Drive 連携 PoC メモ
 
+> ⚠️ **このリポジトリは GitHub で公開されています。機密情報・実データ・CLIENT_ID を含むファイルをコミットしないこと。**
+
 ### やったこと
 
 Google Drive API を使ってブラウザアプリからデータを読み書きできるか確認するため、本番アプリ（system-map-visual）とは別のリポジトリ（`gdrive-poc`）を新設してPoCを実施した。
