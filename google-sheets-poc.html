@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Google Drive PoC</title>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>
+    body { font-family: sans-serif; max-width: 900px; margin: 0 auto; padding: 16px; color: #111; }
+    h1 { font-size: 1.2rem; margin-bottom: 16px; }
+    h2 { font-size: 1rem; margin: 16px 0 6px; }
+    .section { border: 1px solid #ddd; padding: 12px; margin-bottom: 12px; border-radius: 4px; }
+    .hidden { display: none; }
+    table { border-collapse: collapse; width: 100%; margin-bottom: 8px; font-size: 0.9rem; }
+    th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
+    th { background: #f5f5f5; }
+    td[contenteditable="true"]:focus { outline: 2px solid #4f46e5; background: #f0f0ff; }
+    button { padding: 6px 14px; margin-right: 8px; cursor: pointer; border: 1px solid #999; border-radius: 3px; background: #fff; }
+    button.primary { background: #4f46e5; color: #fff; border-color: #4f46e5; }
+    #status { padding: 8px 12px; margin-top: 12px; border-radius: 3px; font-size: 0.85rem; }
+    #status.ok  { background: #d1fae5; color: #065f46; }
+    #status.err { background: #fee2e2; color: #991b1b; }
+  </style>
+</head>
+<body>
+
+<h1>Google Drive PoC</h1>
+
+<div class="section">
+  <button id="login-btn" onclick="signIn()">Googleでログイン</button>
+  <span id="user-info" class="hidden"></span>
+  <button id="logout-btn" class="hidden" onclick="signOut()">ログアウト</button>
+</div>
+
+<div id="file-section" class="section hidden">
+  <label>ファイルID: <input id="file-id-input" type="text" size="44" placeholder="Google Drive の file ID"></label>
+  <button onclick="loadFile()">開く</button>
+</div>
+
+<div id="data-section" class="hidden">
+  <h2>ノード一覧</h2>
+  <table id="nodes-table">
+    <thead><tr><th>key</th><th>nodeType</th><th>title</th><th>segment1</th><th>notes</th></tr></thead>
+    <tbody></tbody>
+  </table>
+  <button onclick="addRow('nodes')">＋行追加</button>
+
+  <h2>矢印一覧</h2>
+  <table id="links-table">
+    <thead><tr><th>id</th><th>from</th><th>to</th><th>title</th><th>notes</th></tr></thead>
+    <tbody></tbody>
+  </table>
+  <button onclick="addRow('links')">＋行追加</button>
+
+  <div style="margin-top: 16px">
+    <button class="primary" onclick="saveToDrive()">Driveに保存</button>
+    <button onclick="exportToSheets()">Sheetsにエクスポート</button>
+  </div>
+</div>
+
+<div id="status" class="hidden"></div>
+
+<script>
+  // ★ Cloud Console で取得したOAuth2クライアントIDをここに貼る ★
+  const CLIENT_ID = 'YOUR_CLIENT_ID_HERE';
+
+  const SCOPES = [
+    'https://www.googleapis.com/auth/drive',
+    'https://www.googleapis.com/auth/spreadsheets',
+  ].join(' ');
+
+  const NODE_FIELDS = ['key', 'nodeType', 'title', 'segment1', 'notes'];
+  const LINK_FIELDS = ['id', 'from', 'to', 'title', 'notes'];
+
+  let tokenClient;
+  let accessToken = null;
+  let currentFileId = null;
+
+  window.onload = () => {
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID,
+      scope: SCOPES,
+      callback: handleTokenResponse,
+    });
+    const fileId = new URLSearchParams(window.location.search).get('fileId');
+    if (fileId) document.getElementById('file-id-input').value = fileId;
+  };
+
+  function signIn() { tokenClient.requestAccessToken(); }
+
+  function handleTokenResponse(resp) {
+    if (resp.error) { showStatus('ログインエラー: ' + resp.error, true); return; }
+    accessToken = resp.access_token;
+    document.getElementById('login-btn').classList.add('hidden');
+    document.getElementById('user-info').textContent = 'ログイン中';
+    document.getElementById('user-info').classList.remove('hidden');
+    document.getElementById('logout-btn').classList.remove('hidden');
+    document.getElementById('file-section').classList.remove('hidden');
+    const fileId = document.getElementById('file-id-input').value.trim();
+    if (fileId) loadFile();
+  }
+
+  function signOut() {
+    google.accounts.oauth2.revoke(accessToken, () => {
+      accessToken = null; currentFileId = null;
+      ['user-info', 'logout-btn', 'file-section', 'data-section'].forEach(id =>
+        document.getElementById(id).classList.add('hidden')
+      );
+      document.getElementById('login-btn').classList.remove('hidden');
+      showStatus('ログアウトしました');
+    });
+  }
+
+  async function loadFile() {
+    const fileId = document.getElementById('file-id-input').value.trim();
+    if (!fileId) { showStatus('ファイルIDを入力してください', true); return; }
+    showStatus('読み込み中...');
+    const res = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    if (!res.ok) { showStatus(`読み込みエラー: ${res.status} ${res.statusText}`, true); return; }
+    const data = await res.json();
+    currentFileId = fileId;
+    renderTable('nodes', data.nodes || [], NODE_FIELDS);
+    renderTable('links', data.links || [], LINK_FIELDS);
+    document.getElementById('data-section').classList.remove('hidden');
+    showStatus('読み込み完了');
+  }
+
+  function renderTable(type, rows, fields) {
+    const tbody = document.querySelector(`#${type}-table tbody`);
+    tbody.innerHTML = '';
+    rows.forEach(row => tbody.appendChild(makeRow(fields, row)));
+  }
+
+  function makeRow(fields, values = {}) {
+    const tr = document.createElement('tr');
+    fields.forEach(f => {
+      const td = document.createElement('td');
+      td.contentEditable = 'true';
+      td.dataset.field = f;
+      td.textContent = values[f] || '';
+      tr.appendChild(td);
+    });
+    return tr;
+  }
+
+  function addRow(type) {
+    const fields = type === 'nodes' ? NODE_FIELDS : LINK_FIELDS;
+    document.querySelector(`#${type}-table tbody`).appendChild(makeRow(fields));
+  }
+
+  function collectTable(type, fields) {
+    return [...document.querySelectorAll(`#${type}-table tbody tr`)]
+      .map(tr => {
+        const obj = {};
+        tr.querySelectorAll('td').forEach(td => { obj[td.dataset.field] = td.textContent.trim(); });
+        return obj;
+      })
+      .filter(obj => obj[fields[0]]);
+  }
+
+  async function saveToDrive() {
+    const data = {
+      nodes: collectTable('nodes', NODE_FIELDS),
+      links: collectTable('links', LINK_FIELDS),
+    };
+    const body = JSON.stringify(data, null, 2);
+    showStatus('保存中...');
+
+    let res;
+    if (currentFileId) {
+      res = await fetch(
+        `https://www.googleapis.com/upload/drive/v3/files/${currentFileId}?uploadType=media`,
+        {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body,
+        }
+      );
+    } else {
+      const boundary = 'bnd_' + Math.random().toString(36).slice(2);
+      const multipart = [
+        `--${boundary}`,
+        'Content-Type: application/json; charset=UTF-8',
+        '',
+        JSON.stringify({ name: 'system-map-poc.json', mimeType: 'application/json' }),
+        `--${boundary}`,
+        'Content-Type: application/json',
+        '',
+        body,
+        `--${boundary}--`,
+      ].join('\r\n');
+
+      res = await fetch(
+        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': `multipart/related; boundary=${boundary}`,
+          },
+          body: multipart,
+        }
+      );
+      if (res.ok) {
+        const result = await res.json();
+        currentFileId = result.id;
+        document.getElementById('file-id-input').value = currentFileId;
+        history.pushState({}, '', `?fileId=${currentFileId}`);
+      }
+    }
+
+    if (!res.ok) { showStatus(`保存エラー: ${res.status} ${res.statusText}`, true); return; }
+    showStatus('Driveに保存しました ✓');
+  }
+
+  async function exportToSheets() {
+    const nodes = collectTable('nodes', NODE_FIELDS);
+    const links = collectTable('links', LINK_FIELDS);
+    showStatus('スプレッドシートを作成中...');
+
+    const createRes = await fetch('https://sheets.googleapis.com/v4/spreadsheets', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        properties: { title: 'system-map エクスポート' },
+        sheets: [
+          { properties: { title: 'Nodes' } },
+          { properties: { title: 'Links' } },
+        ],
+      }),
+    });
+    if (!createRes.ok) { showStatus(`スプレッドシート作成エラー: ${createRes.status}`, true); return; }
+    const ss = await createRes.json();
+    const ssId = ss.spreadsheetId;
+
+    const writeRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${ssId}/values:batchUpdate`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          valueInputOption: 'RAW',
+          data: [
+            { range: 'Nodes!A1', values: [NODE_FIELDS, ...nodes.map(n => NODE_FIELDS.map(f => n[f] || ''))] },
+            { range: 'Links!A1', values: [LINK_FIELDS, ...links.map(l => LINK_FIELDS.map(f => l[f] || ''))] },
+          ],
+        }),
+      }
+    );
+    if (!writeRes.ok) { showStatus(`書き込みエラー: ${writeRes.status}`, true); return; }
+
+    const ssUrl = `https://docs.google.com/spreadsheets/d/${ssId}`;
+    showStatus(`エクスポート完了 → <a href="${ssUrl}" target="_blank" style="color:#065f46">スプレッドシートを開く</a>`);
+  }
+
+  function showStatus(msg, isError = false) {
+    const el = document.getElementById('status');
+    el.innerHTML = msg;
+    el.className = isError ? 'err' : 'ok';
+    el.classList.remove('hidden');
+  }
+</script>
+</body>
+</html>
