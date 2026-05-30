@@ -1,15 +1,51 @@
-# Google Drive PoC
+# Google Drive 連携 PoC メモ
 
-Google Drive API / Sheets API の動作確認用 PoC アプリ。
+### やったこと
 
-## 機能
+Google Drive API を使ってブラウザアプリからデータを読み書きできるか確認するため、本番アプリ（system-map-visual）とは別のリポジトリ（`gdrive-poc`）を新設してPoCを実施した。
 
-- Googleアカウントでログイン（OAuth2）
-- Google DriveのJSONファイルを読み込み・編集・保存
-- `?fileId=XXXX` でURLから直接ファイルを開く
-- ノード/矢印一覧をGoogleスプレッドシートにエクスポート
+**確認できた機能:**
+- GoogleアカウントでのOAuth2ログイン
+- DriveのJSONファイルを読み込み・編集・書き戻し
+- URLパラメータ（`?fileId=XXXX`）でファイルを直接開く
+- スプレッドシートへのエクスポート
 
-## セットアップ手順
+---
+
+### 仕組みのポイント
+
+- ブラウザアプリからGoogle APIを呼ぶには、**静的Webサーバーが必須**（`file://` では動かない）
+- Google Cloud Console でプロジェクトを作成し、**OAuth2クライアントID**を取得する必要がある
+- そのクライアントIDをアプリの HTML に記載することで、APIアクセスが可能になる
+
+---
+
+### 注意点
+
+- **今回のCloud ConsoleプロジェクトはプライベートのGoogleアカウント（tokyotax.net）で作成した。** fout.jp 組織内でのプロジェクト作成には請求先アカウントの設定が必要なため、情シスへの確認が必要。
+- レポジトリに実際のJSONデータ（機密情報）が含まれないよう注意が必要。
+
+---
+
+### 後で削除するもの
+
+| 削除対象 | 場所 |
+|---------|------|
+| テスト用リポジトリ | GitHub: `t25x/gdrive-poc` |
+| テスト用プロジェクト | Google Cloud Console（tokyotax.netアカウント） |
+
+---
+
+### 本番環境を作るのに必要なこと
+
+1. **静的Webサーバーの用意**（GitHub Pages でも可。ただしレポジトリにデータを含めないこと）
+2. **fout.jp 組織で Google Cloud Console プロジェクトを作成**（情シスに確認要）
+   - 作成手順は下記「セットアップ手順」を参照
+   - 完成したら CLIENT_ID をアプリ側の HTML に記載する
+
+---
+
+## セットアップ手順（本番環境構築時に使う）
 
 ### 1. Google Cloud Console でプロジェクトを作成
 
@@ -58,30 +94,10 @@ Settings → Pages → Source: `main` ブランチ → Save
 
 公開URL: `https://[ユーザー名].github.io/gdrive-poc/google-sheets-poc.html`
 
-## テスト用サンプルJSON
+---
 
-以下のJSONをGoogleドライブにアップロードして動作確認に使用する:
+## 技術メモ
 
-```
-{
-  "nodes": [
-    { "key": "node1", "nodeType": "system",  "title": "会計システム",  "segment1": "財務会計", "notes": "本番稼働中" },
-    { "key": "node2", "nodeType": "process", "title": "月次締め処理", "segment1": "管理会計", "notes": "" }
-  ],
-  "links": [
-    { "id": "L001", "from": "node1", "to": "node2", "title": "仕訳データ連携", "notes": "月次バッチ" }
-  ]
-}
-```
-
-ドライブ上のファイルURLから fileId を取り出す:
-
-```
-https://drive.google.com/file/d/[ここがfileId]/view
-```
-
-## 注意事項
-
-- OAuth2トークンの有効期限は1時間。期限切れ後は再ログインが必要。
+- OAuth2トークンの有効期限は1時間。期限切れ後は再ログインが必要（本番ではリフレッシュ処理を追加する）。
 - 「Sheetsにエクスポート」は毎回新規スプレッドシートを作成する（既存を上書きしない）。
 - PoCのOAuthスコープは `drive`（広め）。本番組み込み時は `drive.file` に絞ることを推奨。
