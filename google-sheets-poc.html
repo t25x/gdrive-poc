@@ -123,6 +123,7 @@
 
   function showDrivePicker() {
     if (!accessToken) { showStatus('先にログインしてください', true); return; }
+    if (typeof gapi === 'undefined') { showStatus('Picker が初期化中です。少し待ってから再試行してください', true); return; }
     gapi.load('picker', {
       callback: () => {
         const view = new google.picker.DocsView()
@@ -299,6 +300,7 @@
   }
 
   async function overwriteSheets() {
+    if (!accessToken) { showStatus('先にログインしてください', true); return; }
     const nodes = collectTable('nodes', NODE_FIELDS);
     const links = collectTable('links', LINK_FIELDS);
     showStatus('上書き中...');
