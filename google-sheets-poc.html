@@ -298,6 +298,53 @@
     showStatus(`エクスポート完了 → <a href="${ssUrl}" target="_blank" style="color:#065f46">スプレッドシートを開く</a>`);
   }
 
+  async function overwriteSheets() {
+    const nodes = collectTable('nodes', NODE_FIELDS);
+    const links = collectTable('links', LINK_FIELDS);
+    showStatus('上書き中...');
+
+    const clearRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${exportedSheetsId}/values:batchClear`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ranges: ['Nodes!A:Z', 'Links!A:Z'] }),
+      }
+    );
+    if (!clearRes.ok) {
+      if (clearRes.status === 404) {
+        exportedSheetsId = null;
+        exportedSheetsTitle = null;
+        localStorage.removeItem('sheetsId');
+        localStorage.removeItem('sheetsTitle');
+        updateSheetsButtons();
+        showStatus('スプレッドシートが見つかりません。新規エクスポートしてください', true);
+      } else {
+        showStatus(`クリアエラー: ${clearRes.status} ${clearRes.statusText}`, true);
+      }
+      return;
+    }
+
+    const writeRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${exportedSheetsId}/values:batchUpdate`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          valueInputOption: 'RAW',
+          data: [
+            { range: 'Nodes!A1', values: [NODE_FIELDS, ...nodes.map(n => NODE_FIELDS.map(f => n[f] || ''))] },
+            { range: 'Links!A1', values: [LINK_FIELDS, ...links.map(l => LINK_FIELDS.map(f => l[f] || ''))] },
+          ],
+        }),
+      }
+    );
+    if (!writeRes.ok) { showStatus(`書き込みエラー: ${writeRes.status} ${writeRes.statusText}`, true); return; }
+
+    const ssUrl = `https://docs.google.com/spreadsheets/d/${exportedSheetsId}`;
+    showStatus(`上書き完了 → <a href="${ssUrl}" target="_blank" style="color:#065f46">スプレッドシートを開く</a>`);
+  }
+
   function updateSheetsButtons() {
     const btn = document.getElementById('export-overwrite-btn');
     if (exportedSheetsId) {
