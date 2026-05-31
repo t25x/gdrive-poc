@@ -119,16 +119,19 @@
 
   function showDrivePicker() {
     if (!accessToken) { showStatus('先にログインしてください', true); return; }
-    gapi.load('picker', () => {
-      const view = new google.picker.DocsView()
-        .setMimeTypes('application/json');
-      const picker = new google.picker.PickerBuilder()
-        .addView(view)
-        .setOAuthToken(accessToken)
-        .setDeveloperKey(API_KEY)
-        .setCallback(pickerCallback)
-        .build();
-      picker.setVisible(true);
+    gapi.load('picker', {
+      callback: () => {
+        const view = new google.picker.DocsView()
+          .setMimeTypes('application/json');
+        const picker = new google.picker.PickerBuilder()
+          .addView(view)
+          .setOAuthToken(accessToken)
+          .setDeveloperKey(API_KEY)
+          .setCallback(pickerCallback)
+          .build();
+        picker.setVisible(true);
+      },
+      onerror: () => showStatus('Picker の読み込みに失敗しました', true),
     });
   }
 
