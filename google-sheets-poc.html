@@ -290,6 +290,11 @@
     if (!writeRes.ok) { showStatus(`書き込みエラー: ${writeRes.status}`, true); return; }
 
     const ssUrl = `https://docs.google.com/spreadsheets/d/${ssId}`;
+    exportedSheetsId = ssId;
+    exportedSheetsTitle = ss.properties.title;
+    localStorage.setItem('sheetsId', exportedSheetsId);
+    localStorage.setItem('sheetsTitle', exportedSheetsTitle);
+    updateSheetsButtons();
     showStatus(`エクスポート完了 → <a href="${ssUrl}" target="_blank" style="color:#065f46">スプレッドシートを開く</a>`);
   }
 
