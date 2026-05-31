@@ -98,7 +98,8 @@
   };
 
   function silentSignIn() {
-    tokenClient.requestAccessToken({ prompt: '' });
+    const hint = localStorage.getItem('loginHint') || '';
+    tokenClient.requestAccessToken({ prompt: '', hint });
   }
 
   function signIn() { tokenClient.requestAccessToken(); }
@@ -107,6 +108,7 @@
     if (resp.error) { showStatus('ログインエラー: ' + resp.error, true); return; }
     accessToken = resp.access_token;
     localStorage.setItem('wasLoggedIn', '1');
+    if (!localStorage.getItem('loginHint')) fetchAndStoreLoginHint();
     document.getElementById('login-btn').classList.add('hidden');
     document.getElementById('user-info').textContent = 'ログイン中';
     document.getElementById('user-info').classList.remove('hidden');
@@ -116,10 +118,21 @@
     if (fileId) loadFile();
   }
 
+  async function fetchAndStoreLoginHint() {
+    const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (res.ok) {
+      const info = await res.json();
+      if (info.email) localStorage.setItem('loginHint', info.email);
+    }
+  }
+
   function signOut() {
     google.accounts.oauth2.revoke(accessToken, () => {
       accessToken = null; currentFileId = null;
       localStorage.removeItem('wasLoggedIn');
+      localStorage.removeItem('loginHint');
       ['user-info', 'logout-btn', 'file-section', 'data-section'].forEach(id =>
         document.getElementById(id).classList.add('hidden')
       );
