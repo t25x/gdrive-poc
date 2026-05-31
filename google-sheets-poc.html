@@ -79,6 +79,8 @@
   let tokenClient;
   let accessToken = null;
   let currentFileId = null;
+  let exportedSheetsId = null;
+  let exportedSheetsTitle = null;
 
   window.onload = () => {
     tokenClient = google.accounts.oauth2.initTokenClient({
@@ -113,6 +115,29 @@
       document.getElementById('login-btn').classList.remove('hidden');
       showStatus('ログアウトしました');
     });
+  }
+
+  function showDrivePicker() {
+    if (!accessToken) { showStatus('先にログインしてください', true); return; }
+    gapi.load('picker', () => {
+      const view = new google.picker.DocsView()
+        .setMimeTypes('application/json');
+      const picker = new google.picker.PickerBuilder()
+        .addView(view)
+        .setOAuthToken(accessToken)
+        .setDeveloperKey(API_KEY)
+        .setCallback(pickerCallback)
+        .build();
+      picker.setVisible(true);
+    });
+  }
+
+  function pickerCallback(data) {
+    if (data.action === google.picker.Action.PICKED) {
+      const file = data.docs[0];
+      document.getElementById('file-id-input').value = file.id;
+      loadFile();
+    }
   }
 
   async function loadFile() {
