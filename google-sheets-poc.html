@@ -56,7 +56,8 @@
 
   <div style="margin-top: 16px">
     <button class="primary" onclick="saveToDrive()">Driveに保存</button>
-    <button onclick="exportToSheets()">Sheetsにエクスポート</button>
+    <button id="export-new-btn" onclick="exportToSheets()">新規エクスポート</button>
+    <button id="export-overwrite-btn" style="display:none" onclick="overwriteSheets()"></button>
   </div>
 </div>
 
@@ -90,6 +91,9 @@
     });
     const fileId = new URLSearchParams(window.location.search).get('fileId');
     if (fileId) document.getElementById('file-id-input').value = fileId;
+    exportedSheetsId = localStorage.getItem('sheetsId');
+    exportedSheetsTitle = localStorage.getItem('sheetsTitle');
+    if (exportedSheetsId) updateSheetsButtons();
   };
 
   function signIn() { tokenClient.requestAccessToken(); }
@@ -287,6 +291,16 @@
 
     const ssUrl = `https://docs.google.com/spreadsheets/d/${ssId}`;
     showStatus(`エクスポート完了 → <a href="${ssUrl}" target="_blank" style="color:#065f46">スプレッドシートを開く</a>`);
+  }
+
+  function updateSheetsButtons() {
+    const btn = document.getElementById('export-overwrite-btn');
+    if (exportedSheetsId) {
+      btn.textContent = `「${exportedSheetsTitle}」を上書き`;
+      btn.style.display = '';
+    } else {
+      btn.style.display = 'none';
+    }
   }
 
   function showStatus(msg, isError = false) {
